@@ -420,7 +420,7 @@ impl MemoryType {
 
         if mem_block.sub_allocator.is_empty() {
             if mem_block.sub_allocator.supports_general_allocations() {
-                if self.active_general_blocks > 1 {
+                if self.active_general_blocks >= 1 {
                     let block = self.memory_blocks[block_idx].take();
                     let block = block.ok_or_else(|| {
                         AllocationError::Internal("Memory block must be Some.".into())
