@@ -3,13 +3,14 @@ mod all_dxgi {
         dxgi::*, dxgi1_2::*, dxgi1_3::*, dxgi1_4::*, dxgi1_6::*, dxgiformat::*, dxgitype::*,
     };
 }
+use gpu_allocator::d3d12::ToWinapi;
 use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 use winapi::Interface;
 
 use winapi::shared::winerror::FAILED;
 
-use gpu_allocator::d3d12::{AbstractWinapiPtr, Allocation, AllocationCreateDesc, Allocator};
+use gpu_allocator::d3d12::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::MemoryLocation;
 
 use super::transition_resource;
@@ -273,7 +274,7 @@ impl ImGuiRenderer {
 
             let mut pipeline: *mut ID3D12PipelineState = std::ptr::null_mut();
             let hr = device.CreateGraphicsPipelineState(
-                &desc as *const _,
+                &desc,
                 &ID3D12PipelineState::uuidof(),
                 <*mut *mut ID3D12PipelineState>::cast(&mut pipeline),
             );
@@ -310,8 +311,8 @@ impl ImGuiRenderer {
                 Flags: D3D12_RESOURCE_FLAG_NONE,
             };
             let font_image_memory = allocator
-                .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                .allocate(&AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                    device,
                     &desc,
                     "font_image",
                     MemoryLocation::GpuOnly,
@@ -321,7 +322,7 @@ impl ImGuiRenderer {
             let font_image = unsafe {
                 let mut font_image: *mut ID3D12Resource = std::ptr::null_mut();
                 let hr = device.CreatePlacedResource(
-                    font_image_memory.heap().as_winapi_mut(),
+                    font_image_memory.heap().as_winapi() as *mut _,
                     font_image_memory.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -394,9 +395,9 @@ impl ImGuiRenderer {
                     layouts.len() as u32, // num sub
                     0,                    // intermediate offset
                     layouts.as_mut_ptr(),
-                    &mut num_rows as *mut _,
-                    &mut row_size_in_bytes as *mut _,
-                    &mut total_bytes as *mut _,
+                    &mut num_rows,
+                    &mut row_size_in_bytes,
+                    &mut total_bytes,
                 )
             };
 
@@ -419,8 +420,8 @@ impl ImGuiRenderer {
                 };
 
                 let upload_buffer_memory = allocator
-                    .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                        allocator.device(),
+                    .allocate(&AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                        device,
                         &desc,
                         "font_image upload buffer",
                         MemoryLocation::CpuToGpu,
@@ -430,7 +431,7 @@ impl ImGuiRenderer {
                 let mut upload_buffer: *mut ID3D12Resource = std::ptr::null_mut();
                 let hr = unsafe {
                     device.CreatePlacedResource(
-                        upload_buffer_memory.heap().as_winapi_mut(),
+                        upload_buffer_memory.heap().as_winapi() as *mut _,
                         upload_buffer_memory.offset(),
                         &desc,
                         D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -524,8 +525,8 @@ impl ImGuiRenderer {
             };
 
             let allocation = allocator
-                .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                .allocate(&AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                    device,
                     &desc,
                     "ImGui Constant buffer",
                     MemoryLocation::CpuToGpu,
@@ -535,7 +536,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi_mut(),
+                    allocation.heap().as_winapi() as *mut _,
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
@@ -579,8 +580,8 @@ impl ImGuiRenderer {
             };
 
             let allocation = allocator
-                .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                .allocate(&AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                    device,
                     &desc,
                     "ImGui Vertex buffer",
                     MemoryLocation::CpuToGpu,
@@ -590,7 +591,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi_mut(),
+                    allocation.heap().as_winapi() as *mut _,
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
@@ -633,8 +634,8 @@ impl ImGuiRenderer {
             };
 
             let allocation = allocator
-                .allocate(&AllocationCreateDesc::from_d3d12_resource_desc(
-                    allocator.device(),
+                .allocate(&AllocationCreateDesc::from_winapi_d3d12_resource_desc(
+                    device,
                     &desc,
                     "ImGui Vertex buffer",
                     MemoryLocation::CpuToGpu,
@@ -644,7 +645,7 @@ impl ImGuiRenderer {
             let mut buffer: *mut ID3D12Resource = std::ptr::null_mut();
             let hr = unsafe {
                 device.CreatePlacedResource(
-                    allocation.heap().as_winapi_mut(),
+                    allocation.heap().as_winapi() as *mut _,
                     allocation.offset(),
                     &desc,
                     D3D12_RESOURCE_STATE_INDEX_BUFFER,
@@ -826,8 +827,8 @@ impl ImGuiRenderer {
             ib_offset += indices.len();
 
             unsafe {
-                cmd.IASetVertexBuffers(0, 1, &vbv as *const _);
-                cmd.IASetIndexBuffer(&ibv as *const _);
+                cmd.IASetVertexBuffers(0, 1, &vbv);
+                cmd.IASetIndexBuffer(&ibv);
             };
             for command in draw_list.commands() {
                 match command {
@@ -839,7 +840,7 @@ impl ImGuiRenderer {
                             bottom: cmd_params.clip_rect[3] as i32,
                         };
                         unsafe {
-                            cmd.RSSetScissorRects(1, &scissor_rect as *const _);
+                            cmd.RSSetScissorRects(1, &scissor_rect);
                             cmd.DrawIndexedInstanced(
                                 count as u32,
                                 1,

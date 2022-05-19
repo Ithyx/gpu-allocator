@@ -48,15 +48,11 @@ fn main() -> ash::prelude::VkResult<()> {
             .collect();
 
         let surface_extensions = ash_window::enumerate_required_extensions(&window).unwrap();
-        let extensions_names_raw = surface_extensions
-            .iter()
-            .map(|ext| ext.as_ptr())
-            .collect::<Vec<_>>();
 
         let create_info = vk::InstanceCreateInfo::builder()
             .application_info(&appinfo)
             .enabled_layer_names(&layers_names_raw)
-            .enabled_extension_names(&extensions_names_raw);
+            .enabled_extension_names(surface_extensions);
 
         unsafe {
             entry
@@ -136,7 +132,7 @@ fn main() -> ash::prelude::VkResult<()> {
         desired_image_count = surface_capabilities.max_image_count;
     }
     let surface_resolution = match surface_capabilities.current_extent.width {
-        std::u32::MAX => vk::Extent2D {
+        u32::MAX => vk::Extent2D {
             width: window_width,
             height: window_height,
         },
@@ -334,7 +330,7 @@ fn main() -> ash::prelude::VkResult<()> {
             let (present_index, _) = unsafe {
                 swapchain_loader.acquire_next_image(
                     swapchain,
-                    std::u64::MAX,
+                    u64::MAX,
                     present_complete_semaphore,
                     vk::Fence::null(),
                 )
